@@ -42,21 +42,21 @@
 sysinfo.txt
 *.stackdump
 /Assets/AssetStoreTools*
-*.apk
-*.unitypackage
+#*.apk
+#*.unitypackage
  
 # Visual Studio / MonoDevelop generated #
 [Ee]xported[Oo]bj/
 .vs/
-/*.userprefs
-/*.csproj
+#/*.userprefs
+#/*.csproj
 /*.pidb
 *.pidb.meta
-/*.suo
-/*.sln*
-/*.user
-/*.unityproj
-/*.booproj
+#/*.suo
+#/*.sln*
+#/*.user
+#/*.unityproj
+#/*.booproj
 .consulo/
 /*.tmp
 /*.svd
