@@ -1,0 +1,783 @@
+using UnityEngine;
+using UnityEngine.Networking;
+using System.Collections.Generic;
+using System.Collections;
+
+[RequireComponent(typeof(Player))]
+[RequireComponent(typeof(PlayerController))]
+public class PlayerSetup : NetworkBehaviour {
+
+	NetworkManager networkManager;
+
+	Cloud cloudManager;
+
+	[SerializeField]
+	Behaviour[] componentsTodisable;
+
+	[SerializeField]
+	string remoteLayerName = "RemotePlayers";
+
+	[SerializeField]
+	GameObject playerUIPrefab;
+
+	GameProgress gameProgress;
+
+	[HideInInspector]
+	public GameObject playerUIInstance;
+
+	GameObject fireMoon;
+	GameObject waterMoon;
+	GameObject earthMoon;
+	GameObject airMoon;
+
+	List<GameObject> roots =  new List<GameObject>();
+
+	List<GameObject> AllOrbSockets = new List<GameObject> ();
+
+	List<GameObject> allHealthFruits = new List<GameObject> ();
+
+	[SerializeField]
+	GameObject fireWeaponOrb;
+
+	[SerializeField]
+	GameObject waterWeaponOrb;
+
+	[SerializeField]
+	GameObject earthWeaponOrb;
+
+	[SerializeField]
+	GameObject airWeaponOrb;
+
+
+	[SerializeField]
+	GameObject meteor;
+
+	[SerializeField]
+	GameObject orb;
+
+	List<GameObject> thunders = new List<GameObject>();
+
+	List<GameObject> meteors = new List<GameObject>();
+
+	List<GameObject> miniMoons = new List<GameObject>();
+
+	float lowMeteorSpawn = 10;
+	float highMeteorSpawn = 15;
+
+	float savedFireScore;
+	float savedWaterScore;
+	float savedEarthScore;
+	float savedAirScore;
+
+	[SerializeField]
+	GameObject fireButterfly;
+
+	[SerializeField]
+	GameObject waterButterfly;
+
+	[SerializeField]
+	GameObject earthButterfly;
+
+	[SerializeField]
+	GameObject airButterfly;
+
+	void Start() {
+		NetworkManager networkManager = NetworkManager.singleton;
+		networkManager.GetComponent<AutomaticMigration> ().SetPlayer (GetComponent<Player> ());
+
+		fireMoon = GameObject.FindGameObjectWithTag ("FireMoon");
+		waterMoon = GameObject.FindGameObjectWithTag ("WaterMoon");
+		earthMoon = GameObject.FindGameObjectWithTag ("EarthMoon");
+		airMoon = GameObject.FindGameObjectWithTag ("AirMoon");
+
+		if(!isLocalPlayer) {
+			DisableComponents();
+			AssignRemoteLayer();
+		} else {
+			GameManager.LocalPlayer = GetComponent<Player> ();
+
+			playerUIInstance = Instantiate(playerUIPrefab);
+			playerUIInstance.name = playerUIPrefab.name;
+
+			PlayerUI ui = playerUIInstance.GetComponent<PlayerUI>();
+			if(ui == null) {
+				Debug.LogError("NO PLAYER UI");
+			}
+			ui.SetController(GetComponent<PlayerController>());
+			ui.SetPlayer (GetComponent<Player> ());
+
+			GetComponent<WeaponManager> ().spellPanel = ui.GetComponentInChildren<SpellPanel> ();
+
+			thunders.Clear();
+			meteors.Clear();
+			roots.Clear();
+			AllOrbSockets.Clear();
+
+			AllOrbSockets.AddRange(GameObject.FindGameObjectsWithTag ("EarthOrbSocket"));
+			AllOrbSockets.AddRange(GameObject.FindGameObjectsWithTag ("FireOrbSocket"));
+			AllOrbSockets.AddRange (GameObject.FindGameObjectsWithTag ("WaterOrbSocket"));
+			AllOrbSockets.AddRange (GameObject.FindGameObjectsWithTag ("AirOrbSocket"));
+
+			thunders.AddRange (GameObject.FindGameObjectsWithTag ("CloudThunder"));
+
+			meteors.AddRange (GameObject.FindGameObjectsWithTag ("VolcanotMeteor"));
+
+			roots.AddRange (GameObject.FindGameObjectsWithTag ("BigRoot"));
+
+			miniMoons.AddRange (GameObject.FindGameObjectsWithTag ("MiniMoon"));
+
+			gameProgress = playerUIInstance.GetComponentInChildren<GameProgress> ();
+
+			cloudManager = GameObject.FindGameObjectWithTag ("CloudManager").GetComponent<Cloud>();
+
+			allHealthFruits.AddRange(GameObject.FindGameObjectsWithTag ("HealthFruit"));
+
+			foreach (GameObject _miniMoon in miniMoons) {
+				_miniMoon.GetComponent<SmallMoon> ().SetPlayerUIandPlayer (playerUIInstance, GetComponent<Player>());
+			}
+
+			if(GetComponent<NetworkIdentity> ().isClient) {
+				StartCoroutine (StartSetWorld ());
+			}
+
+			if(GetComponent<NetworkIdentity> ().isServer) {
+				StartCoroutine (SpawnWeaponOrbs());
+				StartCoroutine (SpawnVolcanoMeteors ());
+				StartCoroutine (SpawnThunder());
+				StartCoroutine (SetRootsSize());
+				StartCoroutine (AdjustAllPlayerScores ());
+                StartCoroutine(SpawnHealthFruit());
+                GameObject[] _flyingPlants = GameObject.FindGameObjectsWithTag ("FlyingPlant");
+				foreach (GameObject _plant in _flyingPlants) {
+					_plant.GetComponent<FlyingPlant> ().SetPlantPlayer (GetComponent<Player> ());
+				}
+ 			}
+
+			GameManager.SetSocketList (AllOrbSockets);
+			GameManager.SetThunderList (thunders);
+			GameManager.SetMeteorList (meteors);
+			GameManager.SetTreeRootList (roots);
+			GameManager.SetMiniMoonsList (miniMoons);
+			GameManager.SetFruitList (allHealthFruits);
+
+			GetComponent<Player>().SetupPlayer();
+			SetOtherPlayerWeapons();
+
+			Player _player = GetComponent<Player> ();
+			fireMoon.GetComponent<FireAndWaterMoon> ().SetPlayer (_player);
+			waterMoon.GetComponent<FireAndWaterMoon> ().SetPlayer (_player);
+			earthMoon.GetComponent<FireMoon> ().SetPlayer (_player);
+			airMoon.GetComponent<FireMoon> ().SetPlayer (_player);
+			cloudManager.SetPlayer (_player);
+		}
+	}
+
+	public void ImmigrationSetupRestart() {
+		NetworkManager networkManager = NetworkManager.singleton;
+		networkManager.GetComponent<AutomaticMigration> ().SetPlayer (GetComponent<Player> ());
+
+		fireMoon = GameObject.FindGameObjectWithTag ("FireMoon");
+		waterMoon = GameObject.FindGameObjectWithTag ("WaterMoon");
+		earthMoon = GameObject.FindGameObjectWithTag ("EarthMoon");
+		airMoon = GameObject.FindGameObjectWithTag ("AirMoon");
+
+		if(!isLocalPlayer) {
+			DisableComponents();
+			AssignRemoteLayer();
+		} else {
+			GameManager.LocalPlayer = GetComponent<Player> ();
+
+			playerUIInstance = Instantiate(playerUIPrefab);
+			playerUIInstance.name = playerUIPrefab.name;
+
+			PlayerUI ui = playerUIInstance.GetComponent<PlayerUI>();
+			if(ui == null) {
+				Debug.LogError("NO PLAYER UI");
+			}
+			ui.SetController(GetComponent<PlayerController>());
+			ui.SetPlayer (GetComponent<Player> ());
+
+			GetComponent<WeaponManager> ().spellPanel = ui.GetComponentInChildren<SpellPanel> ();
+
+			thunders.Clear();
+			meteors.Clear();
+			roots.Clear();
+			AllOrbSockets.Clear();
+
+			AllOrbSockets.AddRange(GameObject.FindGameObjectsWithTag ("EarthOrbSocket"));
+			AllOrbSockets.AddRange(GameObject.FindGameObjectsWithTag ("FireOrbSocket"));
+			AllOrbSockets.AddRange (GameObject.FindGameObjectsWithTag ("WaterOrbSocket"));
+			AllOrbSockets.AddRange (GameObject.FindGameObjectsWithTag ("AirOrbSocket"));
+
+			thunders.AddRange (GameObject.FindGameObjectsWithTag ("CloudThunder"));
+
+			meteors.AddRange (GameObject.FindGameObjectsWithTag ("VolcanotMeteor"));
+
+			roots.AddRange (GameObject.FindGameObjectsWithTag ("BigRoot"));
+
+			miniMoons.AddRange (GameObject.FindGameObjectsWithTag ("MiniMoon"));
+
+			gameProgress = playerUIInstance.GetComponentInChildren<GameProgress> ();
+
+			cloudManager = GameObject.FindGameObjectWithTag ("CloudManager").GetComponent<Cloud>();
+
+			allHealthFruits.AddRange(GameObject.FindGameObjectsWithTag ("HealthFruit"));
+
+			foreach (GameObject _miniMoon in miniMoons) {
+				_miniMoon.GetComponent<SmallMoon> ().SetPlayerUIandPlayer (playerUIInstance, GetComponent<Player>());
+			}
+
+			if(GetComponent<NetworkIdentity> ().isClient) {
+				StartCoroutine (StartSetWorld ());
+			}
+
+			if(GetComponent<NetworkIdentity> ().isServer) {
+				StartCoroutine (SpawnWeaponOrbs());
+				StartCoroutine (SpawnVolcanoMeteors ());
+				StartCoroutine (SpawnThunder());
+				StartCoroutine (SetRootsSize());
+				StartCoroutine (AdjustAllPlayerScores ());
+				StartCoroutine(SpawnHealthFruit());
+				GameObject[] _flyingPlants = GameObject.FindGameObjectsWithTag ("FlyingPlant");
+				foreach (GameObject _plant in _flyingPlants) {
+					_plant.GetComponent<FlyingPlant> ().SetPlantPlayer (GetComponent<Player> ());
+				}
+			}
+
+			GameManager.SetSocketList (AllOrbSockets);
+			GameManager.SetThunderList (thunders);
+			GameManager.SetMeteorList (meteors);
+			GameManager.SetTreeRootList (roots);
+			GameManager.SetMiniMoonsList (miniMoons);
+			GameManager.SetFruitList (allHealthFruits);
+
+			GetComponent<Player>().SetupPlayer();
+			SetOtherPlayerWeapons();
+
+			Player _player = GetComponent<Player> ();
+			fireMoon.GetComponent<FireAndWaterMoon> ().SetPlayer (_player);
+			waterMoon.GetComponent<FireAndWaterMoon> ().SetPlayer (_player);
+			earthMoon.GetComponent<FireMoon> ().SetPlayer (_player);
+			airMoon.GetComponent<FireMoon> ().SetPlayer (_player);
+			cloudManager.SetPlayer (_player);
+
+			GetComponent<Animator> ().Rebind ();
+		}
+	}
+		
+	public override void OnStartClient() {
+		base.OnStartClient();
+		string _netID = GetComponent<NetworkIdentity>().netId.ToString();
+		Player _player = GetComponent<Player>();
+		GameManager.RegisterPlayer(_netID, _player);
+	}
+		
+	public void SetScores(float _savedFireScore, float _savedWaterScore,float _savedEarthScore,float _savedAirScore) {
+		savedFireScore = _savedFireScore;
+		savedWaterScore =_savedWaterScore;
+		savedEarthScore =_savedEarthScore;
+		savedAirScore =_savedAirScore;
+	}
+
+	[Command]
+	void CmdSetScore() {
+		GameProgress _gameProgress = GameObject.FindGameObjectWithTag ("GameProgress").GetComponent<GameProgress>();
+		float _fireScore = _gameProgress.fireTeamScore;
+		float _waterScore = _gameProgress.waterTeamScore;
+		float _earthScore = _gameProgress.earthTeamScore;
+		float _airScore = _gameProgress.airTeamScore;
+		TargetSetGameScore(connectionToClient, _fireScore, _waterScore, _earthScore, _airScore);
+	}
+
+	[TargetRpc]
+	public void TargetSetGameScore(NetworkConnection target, float _fireScore,float _waterScore,float _earthScore,float _airScore) {
+		GameProgress _gameProgress = GameObject.FindGameObjectWithTag ("GameProgress").GetComponent<GameProgress>();
+		_gameProgress.SetScoreValues (_fireScore,_waterScore,_earthScore,_airScore);
+		_gameProgress.SetAllScore (_fireScore,_waterScore,_earthScore,_airScore);
+	}
+		
+
+	[Command]
+	void CmdSetPlanets() {
+		int _firePlanetLevel = fireMoon.GetComponentInChildren<EnergySphere> ().GetPlanetLevel ();
+		int _waterPlanetLevle = waterMoon.GetComponentInChildren<EnergySphere> ().GetPlanetLevel ();
+		int _earthPlanetLevle = earthMoon.GetComponentInChildren<EnergySphere> ().GetPlanetLevel ();
+		int _airPlanetLevle = airMoon.GetComponentInChildren<EnergySphere> ().GetPlanetLevel ();
+
+		TargetSetPlanetLevels (connectionToClient, _firePlanetLevel, _waterPlanetLevle, _earthPlanetLevle, _airPlanetLevle);
+	}
+
+	[TargetRpc]
+	public void TargetSetPlanetLevels(NetworkConnection target, int _firePlanetLevel, int _waterPlanetLevle, int _earthPlanetLevle, int _airPlanetLevle) {
+		fireMoon.GetComponentInChildren<EnergySphere> ().SetStartPlanetLevel (_firePlanetLevel);
+		waterMoon.GetComponentInChildren<EnergySphere> ().SetStartPlanetLevel (_waterPlanetLevle);
+		earthMoon.GetComponentInChildren<EnergySphere> ().SetStartPlanetLevel (_earthPlanetLevle);
+		airMoon.GetComponentInChildren<EnergySphere> ().SetStartPlanetLevel (_airPlanetLevle);
+	}
+
+	[Command]
+	void CmdSetMiniMoons() {
+		List<GameObject> _allMiniMoons = new List<GameObject> ();
+		_allMiniMoons.AddRange (GameObject.FindGameObjectsWithTag ("MiniMoon"));
+
+		foreach (GameObject _miniMoon in _allMiniMoons) {
+			string _moonID = _miniMoon.name;
+			string _moonElement = _miniMoon.GetComponent<SmallMoon> ().GetElement();
+			float _countdown = _miniMoon.GetComponent<SmallMoon> ().GetCowntDown ();
+			TargetSetMiniMoons (connectionToClient, _moonID,_moonElement,_countdown);
+
+			List<GameObject> _moonPlayers = _miniMoon.GetComponent<SmallMoon>().GetPlayers();
+
+			foreach (GameObject _player  in _moonPlayers) {
+				string _playerID = _player.name;
+				TargetAddPlayerMoon (connectionToClient, _playerID, _moonID);
+			}
+		}
+	}
+
+	[TargetRpc]
+	public void TargetSetMiniMoons(NetworkConnection target, string _moonId, string _moonElement, float _cowntDown) {
+		foreach (GameObject _miniMoon in miniMoons) {
+			if (_miniMoon.name == _moonId) {
+				_miniMoon.GetComponent<SmallMoon> ().SetMoonSpec (_moonElement);
+				_miniMoon.GetComponent<SmallMoon>().SetCowntDown(_cowntDown);
+			}
+		}
+	}
+
+	[TargetRpc]
+	public void TargetAddPlayerMoon(NetworkConnection target, string _playerID, string _moonID) {
+		Player _player = GameManager.GetPlayer (_playerID);
+
+		foreach (GameObject _miniMoon in miniMoons) {
+			if (_miniMoon.name == _moonID) {
+				_miniMoon.GetComponent<SmallMoon> ().AddPlayer(_player.gameObject);
+			}
+		}
+	}
+
+	[Client]
+	public void PlanetBonus (string _playerType) {
+		CmdOnPlanetBonus (_playerType);
+	}
+
+	[Command]
+	void CmdOnPlanetBonus(string _playerType) {
+		RpcSetPlanetBonus (_playerType);
+	}
+
+	[ClientRpc]
+	void RpcSetPlanetBonus(string _playerType) {
+		GameProgress _gameProgress = GameObject.FindGameObjectWithTag ("GameProgress").GetComponent<GameProgress>();
+		_gameProgress.AddBonusScore (_playerType);
+	}
+
+	[Command]
+	void CmdAdjustAllScore() {
+		GameProgress _gameProgress = GameObject.FindGameObjectWithTag ("GameProgress").GetComponent<GameProgress>();
+		float _fireScore = _gameProgress.fireTeamScore;
+		float _waterScore = _gameProgress.waterTeamScore;
+		float _earthScore = _gameProgress.earthTeamScore;
+		float _airScore = _gameProgress.airTeamScore;
+		RpcAkjustAllGameScore(_fireScore, _waterScore, _earthScore, _airScore);
+	}
+
+	[ClientRpc]
+	public void RpcAkjustAllGameScore(float _fireScore,float _waterScore,float _earthScore,float _airScore) {
+		if(isLocalPlayer){
+			GameProgress _gameProgress = GameObject.FindGameObjectWithTag ("GameProgress").GetComponent<GameProgress>();
+			_gameProgress.SetScoreValues (_fireScore,_waterScore,_earthScore,_airScore);
+			_gameProgress.SetAllScore (_fireScore,_waterScore,_earthScore,_airScore);
+		}
+	}
+
+		
+	[Command]
+	void CmdSetNewPlayerOrbs() {
+		List<GameObject> _allServerSockets = GameManager.allSockets;
+
+		foreach (GameObject _socket in _allServerSockets) {
+			EarthOrbSocket _orbSocket = _socket.GetComponent<EarthOrbSocket> ();
+			GameObject _earthOrb = _orbSocket.GetSocket ();
+
+			if (_earthOrb) {
+				TargetSetAllOrbs (connectionToClient, _socket.transform.position, _orbSocket.name);
+			}
+		}
+	}
+
+	[TargetRpc]
+	public void TargetSetAllOrbs(NetworkConnection target, Vector3 _socketPos, string _orbSocketID) {
+		GameObject _socket = GameManager.GetSocket (_orbSocketID);
+
+		if (_socket.name.Contains ("Fire")) {
+			GameObject _newEarthOrb = (GameObject)Instantiate (fireWeaponOrb, _socketPos, Quaternion.identity);
+			_newEarthOrb.transform.SetParent (_socket.transform);
+			_socket.GetComponent<EarthOrbSocket>().SetOrbInSocket (_newEarthOrb);
+		}
+		if (_socket.name.Contains ("Water")) {
+			GameObject _newEarthOrb = (GameObject)Instantiate (waterWeaponOrb, _socketPos, Quaternion.identity);
+			_newEarthOrb.transform.SetParent (_socket.transform);
+			_socket.GetComponent<EarthOrbSocket>().SetOrbInSocket (_newEarthOrb);
+		}
+		if (_socket.name.Contains ("Earth")) {
+			GameObject _newEarthOrb = (GameObject)Instantiate (earthWeaponOrb, _socketPos, Quaternion.identity);
+			_newEarthOrb.transform.SetParent (_socket.transform);
+			_socket.GetComponent<EarthOrbSocket>().SetOrbInSocket (_newEarthOrb);
+		}
+		if (_socket.name.Contains ("Air")) {
+			GameObject _newEarthOrb = (GameObject)Instantiate (airWeaponOrb, _socketPos, Quaternion.identity);
+			_newEarthOrb.transform.SetParent (_socket.transform);
+			_socket.GetComponent<EarthOrbSocket>().SetOrbInSocket (_newEarthOrb);
+		}
+	}
+
+	[Command]
+	void CmdOnSpawnOrbs(Vector3 _socketPos,string _orbSocketID) {
+		RpcSpawnOrbs (_socketPos, _orbSocketID);
+	}
+
+	[ClientRpc]
+	void RpcSpawnOrbs(Vector3 _socketPos,string _orbSocketID) {
+		GameObject _socket = GameManager.GetSocket (_orbSocketID);
+		if (_socket.name.Contains ("Fire")) {
+			GameObject _newEarthOrb = (GameObject)Instantiate (fireWeaponOrb, _socketPos, Quaternion.identity);
+			_newEarthOrb.transform.SetParent (_socket.transform);
+			_socket.GetComponent<EarthOrbSocket>().SetOrbInSocket (_newEarthOrb);
+		}
+		if (_socket.name.Contains ("Water")) {
+			GameObject _newEarthOrb = (GameObject)Instantiate (waterWeaponOrb, _socketPos, Quaternion.identity);
+			_newEarthOrb.transform.SetParent (_socket.transform);
+			_socket.GetComponent<EarthOrbSocket>().SetOrbInSocket (_newEarthOrb);
+		}
+		if (_socket.name.Contains ("Earth")) {
+			GameObject _newEarthOrb = (GameObject)Instantiate (earthWeaponOrb, _socketPos, Quaternion.identity);
+			_newEarthOrb.transform.SetParent (_socket.transform);
+			_socket.GetComponent<EarthOrbSocket>().SetOrbInSocket (_newEarthOrb);
+		}
+		if (_socket.name.Contains ("Air")) {
+			GameObject _newEarthOrb = (GameObject)Instantiate (airWeaponOrb, _socketPos, Quaternion.identity);
+			_newEarthOrb.transform.SetParent (_socket.transform);
+			_socket.GetComponent<EarthOrbSocket>().SetOrbInSocket (_newEarthOrb);
+		}
+	}
+
+	[Command] 
+	void CmdOnSpawnMeteor(string _meteorID,int _fireScalerController) {
+		RpcSpawnMeteor (_meteorID, _fireScalerController);
+	}
+
+	[ClientRpc]
+	void RpcSpawnMeteor(string _meteorID,int  _fireScalerController) {
+		GameObject _meteor = GameManager.GetMeteor (_meteorID);
+		_meteor.SetActive (true);
+		_meteor.GetComponent<MeteorArcker> ().StartCoroutine ("DisableMeteor", _fireScalerController);
+	}
+		
+	void SetOtherPlayerWeapons() {
+		Player _thisPlayer = GetComponent<Player>();
+
+		List<GameObject> _players =  new List<GameObject>();
+		_players.AddRange(GameObject.FindGameObjectsWithTag("Player"));
+
+		if(_players.Contains(_thisPlayer.gameObject)) {
+			_players.Remove(_thisPlayer.gameObject);
+		}
+
+		foreach(GameObject _enemyPlayer in _players) {
+			int _weaponLevel = _enemyPlayer.GetComponent<WeaponManager>().weaponLevel;
+			string _playerID = _enemyPlayer.name;
+
+			_enemyPlayer.GetComponent<WeaponManager>().SetEnemyPlayerGraphics(_weaponLevel,_playerID);
+
+			string _element = "";
+
+			if(_enemyPlayer.GetComponent<PlayerShoot>().fireElement) {
+				_element = "Fire";
+			}
+			else if(_enemyPlayer.GetComponent<PlayerShoot>().waterElement) {
+				_element = "Water";
+			}
+			else if(_enemyPlayer.GetComponent<PlayerShoot>().earthElement) {
+				_element = "Earth";
+			}
+			else if(_enemyPlayer.GetComponent<PlayerShoot>().airElement) {
+				_element = "Air";
+			}
+			else {
+				Debug.Log("We Got a Problem, some player is with no element");
+			}
+
+			_enemyPlayer.GetComponentInChildren<PlayerGraphics>().SetSkin(_element);
+
+			if (_enemyPlayer.GetComponent<Player> ().holdsOrb) {
+				CmdAssignHoldOrb (_enemyPlayer.name);
+			}
+
+			CmdSetPlayerSize (_enemyPlayer.name);
+		}
+	}
+
+	[Command]
+	public void CmdAssignHoldOrb(string _playerID) {
+		Player _ennemyPlayer = GameManager.GetPlayer (_playerID);
+		GameObject _ennemyOrb = _ennemyPlayer.PassRitualOrb ();
+		string _orbId = _ennemyOrb.GetComponent<NetworkIdentity> ().netId.ToString ();
+
+		TargetAssingSetEnnemyOrb (connectionToClient, _playerID,_orbId);
+	}
+
+	[TargetRpc]
+	public void TargetAssingSetEnnemyOrb(NetworkConnection target,string _playerID, string _orbID) {
+		Player _ennemyPlayer = GameManager.GetPlayer (_playerID);
+		foreach (GameObject _orb in GameManager.allUpgradeOrbs) {
+			if(_orb.GetComponent<NetworkIdentity>().netId.ToString() == _orbID) {
+				_ennemyPlayer.SetOrb (_orb);
+			}
+		}
+	}
+
+	[Command]
+	public void CmdSetPlayerSize(string _playerID) {
+		Player _player = GameManager.GetPlayer(_playerID);
+		int _playerSize = _player.GetComponentInChildren<PlayerGraphics> ().GetSize ();
+		TargetSetPlayerSize (connectionToClient, _playerID, _playerSize);
+	}
+
+	[TargetRpc]
+	public void TargetSetPlayerSize(NetworkConnection target, string _playerID, int _bodysize) {
+		Player _player = GameManager.GetPlayer (_playerID);
+		_player.GetComponentInChildren<PlayerGraphics> ().SetActualSize (_bodysize);
+	}
+
+	[Command]
+	void CmdLaunchThunder(string _thunderID) {
+		RpcLaunchThunder (_thunderID);
+	}
+
+	[ClientRpc]
+	public void RpcLaunchThunder(string _thunderID) {
+		GameObject _thunder = GameManager.GetThunder (_thunderID);
+		_thunder.SetActive (false);
+		_thunder.transform.position = new Vector3((Random.Range(_thunder.transform.position.x -2, _thunder.transform.position.x + 2)),(Random.Range(_thunder.transform.position.y -2,_thunder.transform.position.y +2)), (Random.Range(_thunder.transform.position.z -2,_thunder.transform.position.z +2)));
+		_thunder.SetActive (true);
+	}
+
+	[Command]
+	void CmdSetRoots (int _earthScalerController, string _rootID){
+		RpcTransformRoots (_earthScalerController, _rootID);
+	}
+
+	[ClientRpc]
+	void RpcTransformRoots(int _earthScalerController, string _rootID) {
+		GameObject _root = GameManager.GetRoot (_rootID);
+		_root.GetComponent<TreeRoots>().SetSize (_earthScalerController);
+	}
+
+	[Command]
+	void CmdActivateRoot(string _rootID) {
+		RpcOnActiveRoot (_rootID);
+	}
+
+
+	[ClientRpc]
+	void RpcOnActiveRoot(string _rootID) {
+		GameObject _root = GameManager.GetRoot (_rootID);
+		_root.SetActive (true);
+		_root.GetComponent<TreeRoots> ().AnimationRandomizer ();
+	}
+
+	[Command]
+	void CmdStartResetFruit(string _FruitID) {
+		RpcResetingFruit (_FruitID);
+	}
+
+	[ClientRpc]
+	void RpcResetingFruit(string _FruitID) {
+		GameObject _fruit = GameManager.GetFruit (_FruitID);
+		HealthFruit _healtFruit = _fruit.GetComponent<HealthFruit>();
+		_healtFruit.ResetFruit();
+	}
+		
+	void AssignRemoteLayer() {
+		gameObject.layer = LayerMask.NameToLayer(remoteLayerName);
+		Util.SetLayerRecursively(gameObject, LayerMask.NameToLayer(remoteLayerName));
+	}
+
+	void DisableComponents() {
+		for(int i = 0; i < componentsTodisable.Length; i ++) {
+			componentsTodisable[i].enabled = false;
+		}
+	}
+
+	public void OnDisable() {
+		Destroy(playerUIInstance);
+
+		if(isLocalPlayer) {
+			GameManager.instance.SetSceneCameraActive(true, this.gameObject);
+			GameManager.instance.reposSceneCamera = false;
+		}
+		GameManager.UnRegisterPlayer(transform.name);
+	}
+
+	IEnumerator StartSetWorld() {
+		yield return new WaitForSeconds (2);
+		CmdSetScore ();
+		CmdSetNewPlayerOrbs ();
+		CmdSetPlanets ();
+		CmdSetMiniMoons ();
+	}
+		
+	IEnumerator SpawnWeaponOrbs() {
+		while (true) {
+			yield return new WaitForSeconds (10);
+			foreach (GameObject socket in AllOrbSockets) {
+				EarthOrbSocket _orbSocket = socket.GetComponent<EarthOrbSocket> ();
+				GameObject _earthOrb = _orbSocket.GetSocket ();
+
+				if (!_earthOrb) {
+					if (Random.value >= 0.7) {
+						CmdOnSpawnOrbs (socket.transform.position, _orbSocket.name);
+					}
+				}
+			}
+		}
+	}
+
+	IEnumerator SpawnVolcanoMeteors() {
+		while (true) {
+			yield return new WaitForSeconds (Random.Range(lowMeteorSpawn,highMeteorSpawn));
+			int fireScalerController = 0;
+
+			if (gameProgress.fireTeamScore < 20) {
+				lowMeteorSpawn = 10;
+				highMeteorSpawn = 15;
+				fireScalerController = 0;
+			}
+			if (gameProgress.fireTeamScore >= 20 && gameProgress.fireTeamScore < 40) {
+				lowMeteorSpawn = 8;
+				highMeteorSpawn = 13;
+				fireScalerController = 1;
+			} 
+			if (gameProgress.fireTeamScore >= 40 && gameProgress.fireTeamScore < 60) {
+				lowMeteorSpawn = 7;
+				highMeteorSpawn = 11;
+				fireScalerController = 2;
+			}
+			if (gameProgress.fireTeamScore >= 60 && gameProgress.fireTeamScore < 80) {
+				lowMeteorSpawn = 6;
+				highMeteorSpawn = 10;
+				fireScalerController = 3;
+			}
+			if (gameProgress.fireTeamScore >= 80) {
+				lowMeteorSpawn = 3;
+				highMeteorSpawn = 8;
+				fireScalerController = 4;
+			}
+
+			foreach (GameObject _meteor in meteors) {
+				if (Random.value >= 0.3) {
+					CmdOnSpawnMeteor (_meteor.name,fireScalerController);
+				}
+			}
+		}
+	}
+		
+	IEnumerator SpawnThunder() {
+		int _rounds = 1;
+
+		while (true) {
+			yield return new WaitForSeconds (Random.Range (5,8));
+
+			if (gameProgress.airTeamScore < 20) {
+				_rounds = 1;
+			}
+			if (gameProgress.airTeamScore >= 20) {
+				_rounds = 2;
+			} 
+			if (gameProgress.airTeamScore >= 40) {
+				_rounds = 3;
+			}
+			if (gameProgress.airTeamScore >= 60) {
+				_rounds = 4;
+			}
+			if (gameProgress.airTeamScore >= 80) {
+				_rounds = 5;
+			}
+
+			for (int i = 0; i < _rounds; i++) {
+				yield return new WaitForSeconds (Random.Range (0.8f, 2.5f));
+
+				foreach (GameObject _thunder in thunders) {
+					if (Random.value >= 0.4) {
+						CmdLaunchThunder (_thunder.name);
+					}
+				}
+			}
+		}
+	}
+
+	IEnumerator SetRootsSize() {
+		int _earthScalerController = 0;
+
+		while (true) {
+			yield return new WaitForSeconds (10);
+			if (gameProgress.earthTeamScore < 20) {
+				_earthScalerController = 0;
+			}
+			if (gameProgress.earthTeamScore >= 20 && gameProgress.earthTeamScore < 40) {
+				_earthScalerController = 1;
+			} 
+			if (gameProgress.earthTeamScore >= 40 && gameProgress.earthTeamScore < 60) {
+				_earthScalerController = 2;
+			}
+			if (gameProgress.earthTeamScore >= 60 && gameProgress.earthTeamScore < 80) {
+				_earthScalerController = 3;
+			}
+			if (gameProgress.earthTeamScore >= 80) {
+				_earthScalerController = 4;
+			}
+
+
+			foreach (GameObject root in roots) {
+				if (Random.value >= 0.5) {
+					CmdActivateRoot (root.name);
+					CmdSetRoots (_earthScalerController, root.name);
+				}
+			}
+		}
+	}
+
+	IEnumerator SpawnHealthFruit() {
+		yield return new WaitForSeconds (3);
+		foreach (GameObject _fruit in allHealthFruits) {
+			HealthFruit _healtFruit = _fruit.GetComponent<HealthFruit>();
+			_healtFruit.ResetFruit();
+		}
+		while (true) {
+			yield return new WaitForSeconds (25);
+			foreach (GameObject _fruit in allHealthFruits) {
+				if (Random.value > 0.5) {
+					if (_fruit.GetComponent<HealthFruit> ().readyToDrop) {
+						string _fruiID = _fruit.name;
+						CmdStartResetFruit (_fruiID);
+					}
+                }
+			}
+		}
+	}
+
+	IEnumerator AdjustAllPlayerScores() {
+		while (true) {
+			yield return new WaitForSeconds (100);
+			CmdAdjustAllScore ();
+		}
+	}
+
+	IEnumerator ImmigrationScoreAdjust() {
+		yield return new WaitForSeconds(3);
+		gameProgress.SetScoreValues(savedFireScore,savedWaterScore,savedEarthScore,savedAirScore);
+		gameProgress.SetAllScore(savedFireScore,savedWaterScore,savedEarthScore,savedAirScore);
+		GetComponent<Player>().StartCoroutine("InitialSetup");
+	}
+}
