@@ -1,0 +1,249 @@
+using UnityEngine;
+using System.Collections;
+using System.Collections.Generic;
+
+public class GameManager : MonoBehaviour {
+
+	#region Player tracking
+	
+	private const string PLAYER_ID_PREFIX = "Player" ;
+
+	public static Dictionary<string, Player> players = new Dictionary<string, Player>();
+
+	public static void RegisterPlayer(string _netID, Player _player) {
+		string _playerID = PLAYER_ID_PREFIX + _netID;
+		players.Add(_playerID, _player);
+		_player.transform.name = _playerID;
+	}
+
+	public static void UnRegisterPlayer(string _playerID) {
+		players.Remove(_playerID);
+	}
+
+	public static Player GetPlayer(string _playerID)  {
+		return players[_playerID];
+	}
+
+	public static void ClearPlayerDict() {
+		players.Clear ();
+	}
+	#endregion
+
+	#region Player respawn
+
+	public static GameManager instance;
+
+	public MatchSettings matchSettings;
+
+	public bool reposSceneCamera = false;
+	private Vector3 futurSceneCameraPos;
+	private GameObject deadPlayer;
+
+	[SerializeField]
+	private GameObject sceneCamera;
+
+	public static Player LocalPlayer;
+
+	public static Dictionary<string, GameObject> sockets = new Dictionary<string, GameObject>();
+	public static List<GameObject> allSockets = new List<GameObject>();
+
+	public static Dictionary<string, GameObject> thunders = new Dictionary<string, GameObject>();
+	public static List<GameObject> allThunders = new List<GameObject>();
+
+	public static Dictionary<string, GameObject> meteors = new Dictionary<string, GameObject>();
+	public static List<GameObject> allMeteors = new List<GameObject>();
+
+	public static Dictionary<string, GameObject> treeRoots =  new Dictionary<string, GameObject>();
+	public static List<GameObject> allRoots = new List<GameObject> ();
+
+	public static Dictionary<string, GameObject> miniMoons =  new Dictionary<string, GameObject>();
+	public static List<GameObject> allMiniMoons = new List<GameObject> ();
+
+	public static List<GameObject> allbutterflies = new List<GameObject>();
+
+	public static List<GameObject> allUpgradeOrbs = new List<GameObject>();
+
+	public static Dictionary<string, GameObject> fruits = new Dictionary<string, GameObject>();
+	public static List<GameObject> allfruits = new List<GameObject>();
+
+	void Awake() {
+		if(instance != null) {
+			Debug.LogError("more than one game manager");
+		} else {
+			instance = this;
+
+			players.Clear ();
+
+			sockets.Clear ();
+			allSockets.Clear ();
+
+			thunders.Clear ();
+			allThunders.Clear ();
+
+			meteors.Clear ();
+			allMeteors.Clear ();
+
+			treeRoots.Clear ();
+			allRoots.Clear ();
+
+			miniMoons.Clear ();
+			allMiniMoons.Clear ();
+
+			allbutterflies.Clear ();
+			allUpgradeOrbs.Clear ();
+
+			fruits.Clear ();
+			allfruits.Clear ();
+		}
+	}
+
+	void Update() {
+		DeathCameraAnimation();
+	}
+
+	public static void SetLocalPlayer() {
+
+	}
+
+	public static void SetSocketsDict() {
+		foreach (GameObject socket in allSockets) {
+			string _socketName = socket.name;
+			sockets.Add (_socketName, socket);
+		}
+	}
+
+	public static GameObject GetSocket(string _socketID)  {
+		return sockets[_socketID];
+	} 
+
+	public static GameObject GetFruit(string _fruitID) {
+		return fruits [_fruitID];
+	}
+
+	public static void SetFruitDict() {
+		foreach (GameObject _fruit in allfruits) {
+			string _fruitID = _fruit.name;
+			fruits.Add (_fruitID, _fruit);
+		}
+	}
+
+	public static void SetMiniMoonsDict() {
+		foreach (GameObject _moon in allMiniMoons) {
+			string _moonID = _moon.name;
+			miniMoons.Add (_moonID, _moon);
+		}
+	}
+
+	public static GameObject GetMoon(string _moonID) {
+		return miniMoons [_moonID];
+	}
+
+	public static void SetThundersDict() {
+		foreach (GameObject _thunder in allThunders) {
+			string _thunderName = _thunder.name;
+			thunders.Add (_thunderName, _thunder);
+		}
+	}
+
+	public static GameObject GetThunder(string _thunderID) {
+		return thunders [_thunderID];
+	}
+
+
+	public static void SetMeteorsDic() {
+		foreach (GameObject _meteor in allMeteors) {
+			string _meteorID = _meteor.name;
+			meteors.Add (_meteorID, _meteor);
+		}
+	}
+
+	public static GameObject GetMeteor(string _meteorID) {
+		return meteors [_meteorID];
+	}
+
+	public static void SetRootDic() {
+		foreach (GameObject _root in allRoots) {
+			string _rootName = _root.name;
+			treeRoots.Add (_rootName, _root);
+		}
+	}
+
+	public static GameObject GetRoot(string _rootID) {
+		return treeRoots [_rootID];
+	}
+
+	public void SetSceneCameraActive(bool isActive, GameObject player) {
+		if(sceneCamera == null) 
+			return;
+		sceneCamera.SetActive(isActive);
+
+		if(isActive == true) {
+			sceneCamera.transform.position = player.GetComponentInChildren<Camera>().gameObject.transform.position;
+			sceneCamera.transform.rotation = player.GetComponentInChildren<Camera>().gameObject.transform.rotation;
+
+			futurSceneCameraPos = player.transform.up * 80;
+			deadPlayer = player;
+			sceneCamera.GetComponent<Camera>().fieldOfView = 19f;
+			reposSceneCamera = true;
+		}
+	}
+
+	public void DeathCameraAnimation() {
+		if(!reposSceneCamera) 
+			return;
+		else {
+			Vector3 lookAtPos = deadPlayer.transform.position; 
+    		Quaternion lookRot = Quaternion.LookRotation(lookAtPos - sceneCamera.transform.position);
+			sceneCamera.transform.rotation = Quaternion.Lerp(sceneCamera.transform.rotation,lookRot,Time.deltaTime * 3f);
+			sceneCamera.transform.position = Vector3.Lerp(sceneCamera.transform.position,futurSceneCameraPos, Time.deltaTime * 1f);
+		}
+	}
+
+	public static void SetSocketList(List<GameObject> _sockets) {
+		allSockets = _sockets;
+		SetSocketsDict ();
+	}
+
+	public static void SetThunderList(List<GameObject> _thunders) {
+		allThunders = _thunders;
+		SetThundersDict ();
+	}
+
+	public static void SetMeteorList(List<GameObject> _meteors){
+		allMeteors = _meteors;
+		SetMeteorsDic ();
+		foreach(GameObject _meteor in allMeteors) {
+			_meteor.GetComponent<MeteorArcker> ().StartCoroutine ("StartReset");
+		}
+	}
+
+	public static void SetTreeRootList(List<GameObject> _roots) {
+		allRoots = _roots;
+		SetRootDic ();
+	}
+
+	public static void SetFruitList(List<GameObject> _fruits) {
+		allfruits = _fruits;
+		SetFruitDict ();
+	}
+
+	public static void SetMiniMoonsList(List<GameObject> _moons) {
+		allMiniMoons = _moons;
+
+		GameObject fireMoon = GameObject.FindGameObjectWithTag ("FireMoon");
+		allMiniMoons.Add (fireMoon);
+
+		GameObject waterMoon = GameObject.FindGameObjectWithTag ("WaterMoon");
+		allMiniMoons.Add (waterMoon);
+
+		GameObject earthMoon = GameObject.FindGameObjectWithTag ("EarthMoon");
+		allMiniMoons.Add (earthMoon);
+
+		GameObject airMoon = GameObject.FindGameObjectWithTag ("AirMoon");
+		allMiniMoons.Add (airMoon);
+
+		SetMiniMoonsDict ();
+	}
+
+	#endregion
+}
