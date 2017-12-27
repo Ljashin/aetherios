@@ -1,0 +1,269 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.Networking;
+
+public class NetWorkEvenManager : NetworkBehaviour {
+
+	[SerializeField]
+	GameObject fireButterfly;
+
+	[SerializeField]
+	GameObject waterButterfly;
+
+	[SerializeField]
+	GameObject earthButterfly;
+
+	[SerializeField]
+	GameObject airButterfly;
+
+	[SerializeField]
+	GameObject playerOrb;
+
+	EnergySphere fireMoonSphere;
+	EnergySphere waterMoonSphere;
+	EnergySphere earthMoonSphere;
+	EnergySphere airMoonSphere;
+
+	List<GameObject> flyingplants =  new List<GameObject>();
+
+	public override void OnStartClient() {
+		fireMoonSphere = GameObject.FindGameObjectWithTag ("FireMoon").GetComponent<TeamMoon>().GetRitualOrb();
+		waterMoonSphere = GameObject.FindGameObjectWithTag ("WaterMoon").GetComponent<TeamMoon>().GetRitualOrb();
+		earthMoonSphere = GameObject.FindGameObjectWithTag ("EarthMoon").GetComponent<TeamMoon>().GetRitualOrb();
+		airMoonSphere = GameObject.FindGameObjectWithTag ("AirMoon").GetComponent<TeamMoon>().GetRitualOrb();
+		flyingplants.AddRange(GameObject.FindGameObjectsWithTag ("FlyingPlant"));
+	}
+		
+	[Command]
+	public void CmdCallAddPlayerMoon(string _playerID, string _moonID) {
+		RpcAddPlayerMoon (_playerID,  _moonID);
+	}
+
+	[ClientRpc]
+	void RpcAddPlayerMoon(string _playerID, string _moonID) {
+		Player _player = GameManager.GetPlayer (_playerID);
+		GameObject _miniMoon = GameManager.GetMoon (_moonID);
+
+		_miniMoon.GetComponent<SmallMoon>().AddPlayer (_player.gameObject);
+		_player.transform.SetParent (_miniMoon.transform);
+	}
+
+	[Command]
+	public void CmdCallRemovePlayer(string _playerID, string _moonID) {
+		RpcRemovePlayerMoon (_playerID,_moonID);
+	}
+
+	[ClientRpc]
+	void RpcRemovePlayerMoon(string _playerID, string _moonID) {
+		Player _player = GameManager.GetPlayer (_playerID);
+		GameObject _miniMoon = GameManager.GetMoon (_moonID);
+
+		_miniMoon.GetComponent<SmallMoon> ().RemovePlayer (_player.gameObject);
+		_player.transform.SetParent (null);
+	}
+
+	[Client]
+	public void StartParenting(string _playerId, string _parentID) {
+		CmdOnCallParenting(_playerId,_parentID);
+	}
+
+	[Command]
+	public void CmdOnCallParenting(string _playerId, string _parentID){
+		RpcSetParenting(_playerId,_parentID);
+	}
+
+	[ClientRpc]
+	void RpcSetParenting(string _playerId, string _parentID) {
+		Player _player = GameManager.GetPlayer (_playerId);
+		if (_parentID != null) {
+			Debug.Log ("SETTING PARENT OF NON NULL");
+			if (_parentID.Contains ("FlyingPlant")) {
+				Debug.Log ("_playerId + _parentID" + _playerId + _parentID);
+
+				foreach (GameObject _plant in flyingplants) {
+					if (_plant.name == _parentID) {
+						_player.transform.SetParent (_plant.transform);
+						Debug.Log ("GO A PLANT PARENT");
+					}
+				}
+			}
+		} else {
+			_player.transform.SetParent (null);
+			Debug.Log ("SETTING PARENT TO NULL");
+		}
+	}
+
+	[Command]
+	public void CmdCallPortalToPlanet(string _playerID, Vector3 _destination) {
+		RpcTeamPortal (_playerID, _destination);
+	}
+
+	[ClientRpc]
+	void RpcTeamPortal(string _playerID, Vector3 _destination) {
+		Player _player = GameManager.GetPlayer(_playerID);
+		_player.transform.SetParent(null);
+		_player.transform.position = _destination;
+	}
+
+	[Command]
+	public void CmdCallPortalToMoon(string _playerID,string _moonID, Vector3 _destination) {
+		RpcPlanetPortal ( _playerID, _moonID, _destination);
+	}
+
+	[ClientRpc]
+	void RpcPlanetPortal(string _playerID,string _moonID, Vector3 _destination) {
+		Player _player = GameManager.GetPlayer(_playerID);
+		GameObject _moon = GameManager.GetMoon (_moonID);
+
+		_player.transform.SetParent(_moon.transform);
+		_player.transform.position = _destination;
+	}
+
+	[Command]
+	public void CmdCallSpawnButterfly(Vector3 _spawnPoint, string _element) {
+		GameObject _butterFly = null;
+
+		if (_element == "Fire") {
+			_butterFly = Instantiate (fireButterfly, _spawnPoint, Quaternion.identity);
+		} else if (_element == "Water") {
+			_butterFly = Instantiate (waterButterfly, _spawnPoint, Quaternion.identity);
+		} else if (_element == "Earth") {
+			_butterFly = Instantiate (earthButterfly, _spawnPoint, Quaternion.identity);
+		} else if (_element == "Air") {
+			_butterFly = Instantiate (airButterfly, _spawnPoint, Quaternion.identity);
+		}
+
+		_butterFly.GetComponent<MoonSpirit>().netName = "ButterFly" + GameManager.allbutterflies.Count;
+
+		NetworkServer.Spawn (_butterFly);
+	}
+
+	[Command]
+	public void CmdCallDestroyButterFly(string _butterFlyID, string _playerID) {
+		for (int i = GameManager.allbutterflies.Count -1; i >= 0; i--) {
+			if (GameManager.allbutterflies [i] == null) {
+				GameManager.allbutterflies.RemoveAt (i);
+			}
+		}
+
+		foreach (GameObject _butterFly in GameManager.allbutterflies) {
+			if (_butterFly.GetComponent<NetworkIdentity>().netId.ToString() == _butterFlyID) {
+				NetworkServer.Destroy (_butterFly);
+			}
+		}
+		RpcEvolveDragon (_playerID);
+	}
+
+	[ClientRpc]
+	void RpcEvolveDragon(string _playerID) {
+		Player _player = GameManager.GetPlayer(_playerID);
+		_player.GetComponentInChildren<PlayerGraphics> ().Evolve ();
+	}
+
+	[Client]
+	public void StartAttachOrb(string _playerID, string _orbID) {
+		CmdCallSetOrb (_playerID,_orbID);
+	}
+
+	[Command]
+	void CmdCallSetOrb(string _playerID,string _orbID) {
+		RpcSetOrb (_playerID,_orbID);
+	}
+
+	[ClientRpc]
+	void RpcSetOrb(string _playerID, string _orbID) {
+		Player _player = GameManager.GetPlayer (_playerID);
+
+		for (int i = GameManager.allUpgradeOrbs.Count -1 ; i >= 0; i--) {
+			if (GameManager.allUpgradeOrbs [i] == null) {
+				GameManager.allUpgradeOrbs.RemoveAt(i);
+			}
+		}
+
+		foreach (GameObject _orb in GameManager.allUpgradeOrbs) {
+			if (_orb.GetComponent<NetworkIdentity> ().netId.ToString() == _orbID) {
+				_player.SetOrb (_orb);
+			}
+		}
+	}
+
+	[Client]
+	public void StartCallSpawnOrb(Vector3 _orbSpawnPos) {
+		CmdCallSpawnOrb (_orbSpawnPos);
+	}
+
+	[Command]
+	void CmdCallSpawnOrb(Vector3 _orbSpawnPos) {
+		GameObject _orb = GameObject.Instantiate (playerOrb, _orbSpawnPos, Quaternion.identity);
+		NetworkServer.Spawn (_orb);
+	}
+
+	[Client]
+	public void StartCallPlanetUpgrade(string _playerID,string _planetID) {
+		CmdOnCallPlanetUpgrade (_playerID, _planetID);
+	}
+
+	[Command]
+	void CmdOnCallPlanetUpgrade(string _playerID, string _planetID) {
+		RpcUpgradePlanet (_playerID, _planetID);
+
+		Player _player = GameManager.GetPlayer (_playerID);
+		PlayerShoot _playerShoot = _player.GetComponent<PlayerShoot> ();
+		string playerType = "";
+		if (_playerShoot.fireElement) {
+			playerType = "Fire";
+		} else if (_playerShoot.waterElement) {
+			playerType = "Water";
+		} else if (_playerShoot.earthElement) {
+			playerType = "Earth";
+		} else if (_playerShoot.airElement) {
+			playerType = "Air";
+		}
+
+		_player.GetComponent<PlayerSetup> ().PlanetBonus (playerType);
+	}
+
+	[ClientRpc]
+	void RpcUpgradePlanet(string _playerID, string _planetID) {
+		Player _player = GameManager.GetPlayer (_playerID);
+		EnergySphere _energySphere =  null;
+
+		if (_planetID == "FireMoon") {
+			_energySphere = fireMoonSphere;
+		} else if (_planetID == "WaterMoon") {
+			_energySphere = waterMoonSphere;
+		} else if (_planetID == "EarthMoon") {
+			_energySphere = earthMoonSphere;
+		} else if (_planetID == "AirMoon") {
+			_energySphere = airMoonSphere;
+		}
+
+		GameObject _playerOrb = _player.PassRitualOrb ();
+		_player.ClearRitualOrbs ();
+		_playerOrb.transform.SetParent (_energySphere.transform);
+
+		_playerOrb.GetComponent<RitualOrb> ().UpgradeSphere (_energySphere.gameObject);
+
+		_energySphere.UpgradePLanet ();
+	}
+
+	[Client]
+	public void StartHealthBonus(string _playerID, string _healthPlantID) {
+		CmdOnCallHealthBonus (_playerID, _healthPlantID);
+	}
+
+	[Command]
+	void CmdOnCallHealthBonus(string _playerID, string _healthPlantID) {
+		RpcAddHealth (_playerID, _healthPlantID);
+	}
+
+	[ClientRpc]
+	void RpcAddHealth(string _playerID, string _healthPlantID) {
+		Player _player = GameManager.GetPlayer(_playerID);
+		_player.RegerateHP(10);
+
+		GameObject _healthPlant = GameManager.GetFruit (_healthPlantID);
+		_healthPlant.GetComponent<HealthFruit> ().EatFruit ();
+	}
+}
