@@ -1,0 +1,275 @@
+using UnityEngine;
+using UnityEngine.UI;
+using System.Collections;
+
+[RequireComponent(typeof(Motor))]
+public class PlayerController : MonoBehaviour {
+
+	float moveSpeed = 4f;
+	float defaultSpeed = 4f;
+	float maxSpeed = 7f;
+
+	float lookSensitivityX = 1.25f;
+	float lookSensitivityY = 1f;
+
+	float playerRotationForce = 2.5f;
+
+	float thrusterForce = 6000f;
+
+	float thrusterFuelBrunSpeed = 0.6f;
+	float thrusterFuelRegenSoeed = 0.2f;
+
+	float thrusterFuelAmmount = 1f;
+
+	Image camWaterUI;
+
+	[SerializeField]
+	GameObject camWaveField;
+
+	public float GetThrusterFuelAmmount() {
+		return thrusterFuelAmmount;
+	}
+
+	public void SetCamWaterUI(Image _camWaterUI) {
+		camWaterUI = _camWaterUI;
+	}
+
+	[SerializeField]
+	private LayerMask environmentLayerMask;
+
+	Motor motor;
+
+	public GravityAttracter gravitator;
+
+	GameObject waterCollider;
+
+	bool fire;
+	bool water;
+	bool earth;
+	bool air;
+
+	bool inWater;
+
+	void Start() {
+		motor = GetComponent<Motor>();
+		gravitator = GameObject.FindGameObjectWithTag("Gravitator").GetComponent<GravityAttracter>();
+		waterCollider = GameObject.FindGameObjectWithTag("WaterCollider");
+		defaultSpeed = moveSpeed;
+		camWaveField.SetActive (false);
+	}
+
+	void Update() {
+		if(PauseMenu.IsOn || GameProgress.gameIsOver)  {
+			if(Cursor.lockState != CursorLockMode.None) 
+				Cursor.lockState = CursorLockMode.None;
+
+				motor.Move(Vector3.zero);
+				motor.Rotate(Vector3.zero);
+				motor.RotateCamera(0f,0f);
+			return;
+		}
+
+		if(Cursor.lockState != CursorLockMode.Locked) {
+			Cursor.lockState = CursorLockMode.Locked;
+		}
+
+		float _xMove = Input.GetAxisRaw("Horizontal");
+		float _zMove = Input.GetAxisRaw("Vertical");
+
+		if (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.UpArrow)) {
+			if (moveSpeed < 2f) {
+				moveSpeed = 3f;
+			}
+			if (moveSpeed >= 3f && moveSpeed < maxSpeed) {
+				moveSpeed += 0.1f;
+			} 
+		} else {
+			moveSpeed = defaultSpeed;
+		}
+
+		Vector3 _moveHorizontal = transform.right * _xMove;
+		Vector3 _moveVectival = transform.forward * _zMove;
+
+		Vector3 _velocity = (_moveHorizontal + _moveVectival).normalized * moveSpeed;
+
+		motor.Move(_velocity);
+
+		float _yRot = Input.GetAxisRaw("RotatePlayer");
+
+		Vector3 _rotation = new Vector3(0f, _yRot, 0f) * playerRotationForce;
+
+		motor.Rotate(_rotation);
+
+		float _yCamRot = Input.GetAxisRaw("Mouse X");
+		float _cameraRotationY = _yCamRot * lookSensitivityX;
+
+		float _xCamRot = Input.GetAxisRaw("Mouse Y");
+		float _cameraRotationX = _xCamRot * lookSensitivityY;
+
+		motor.RotateCamera (_cameraRotationX, _cameraRotationY);
+
+		Vector3 _thrusterForce = Vector3.zero;
+
+		if(Input.GetButton("Jump") && thrusterFuelAmmount > 0f) {
+			thrusterFuelAmmount -= thrusterFuelBrunSpeed * Time.deltaTime;
+
+			if(thrusterFuelAmmount >= 0.01f) {
+				Vector3 targetDirection = (transform.position - gravitator.transform.position).normalized;
+				_thrusterForce = targetDirection * thrusterForce;
+			}
+		} else  {
+			if (!motor.flying) {
+				thrusterFuelAmmount += thrusterFuelRegenSoeed * Time.deltaTime;
+			}
+		}
+		thrusterFuelAmmount = Mathf.Clamp(thrusterFuelAmmount,0f,1f);
+		motor.ApplyThruster(_thrusterForce);
+	}
+
+	public void ChangeMouseSensitivity(float _lookSensitivityX, float _lookSensitivityY) {
+		lookSensitivityX = _lookSensitivityX;
+		lookSensitivityY = _lookSensitivityY;
+	}
+
+	public void SetGravitator(GravityAttracter _gravitator) {
+		gravitator = _gravitator;
+	}
+
+	public void SetThrusterStats(float _thrusterBurn, float _thrusterReg) {
+		thrusterFuelBrunSpeed = _thrusterBurn;
+		thrusterFuelRegenSoeed = _thrusterReg;
+	}
+
+	public GravityAttracter GetGravitator() {
+		return gravitator;
+	}
+
+	public void SetDeffaultGravitator() {
+		gravitator = GameObject.FindGameObjectWithTag("Gravitator").GetComponent<GravityAttracter>();
+		motor.SetGravitator (gravitator);
+	}
+
+	public void SetElement(bool _fire, bool _water, bool _earth, bool _air) {
+		fire = _fire;
+		water = _water;
+		earth = _earth;
+		air = _air;
+		SetSpeed(0);
+	}
+
+	public void SetSpeed(int bodyLevel) {
+		if (bodyLevel == 0) {
+			if (fire) {
+				moveSpeed = 5;
+				defaultSpeed = moveSpeed;
+			} else if (water) {
+				moveSpeed = 5;
+				defaultSpeed = moveSpeed;
+			} else if (earth) {
+				moveSpeed = 5;
+				defaultSpeed = moveSpeed;
+			} else if (air) {
+				moveSpeed = 5;
+				defaultSpeed = moveSpeed;
+			}
+			gravitator.ResetGravity ();
+			maxSpeed = 8f;
+
+		} else if (bodyLevel == 1) {
+			if (fire) {
+				moveSpeed = 7;
+				defaultSpeed = moveSpeed;
+			} else if (water) {
+				moveSpeed = 7;
+				defaultSpeed = moveSpeed;
+			} else if (earth) {
+				moveSpeed = 7;
+				defaultSpeed = moveSpeed;
+			} else if (air) {
+				moveSpeed = 7;
+				defaultSpeed = moveSpeed;
+			}
+			gravitator.ResetGravity ();
+			maxSpeed = 11f;
+		} else if (bodyLevel == 2) {
+			if (fire) {
+				moveSpeed = 9;
+				defaultSpeed = moveSpeed;
+			} else if (water) {
+				moveSpeed = 9;
+				defaultSpeed = moveSpeed;
+			} else if (earth) {
+				moveSpeed = 9;
+				defaultSpeed = moveSpeed;
+			} else if (air) {
+				moveSpeed = 9;
+				defaultSpeed = moveSpeed;
+			}
+			gravitator.ResetGravity ();
+			maxSpeed = 13f;
+		} 
+	}
+
+	public void ResetWaterUI() {
+		camWaterUI.enabled = false;
+		camWaveField.SetActive (false);
+		inWater = false;
+	}
+
+	void OnTriggerEnter(Collider _coll) {
+		if(!inWater) {
+			if(_coll.gameObject == waterCollider) {
+				SetWaterSpecs (true);
+			}
+		}
+	}
+
+	void OnTriggerExit(Collider _coll) {
+		if(inWater) {
+			if(_coll.gameObject == waterCollider) {
+				SetWaterSpecs (false);
+			}
+		}
+	}
+
+	public void SetWaterSpecs(bool _wasterSet) {
+		if(_wasterSet) {
+			if(fire) {
+				moveSpeed -= 8;
+			}
+			if(water) {
+				moveSpeed += 9;
+			}
+			if(earth) {
+				moveSpeed += 4;
+			}
+			if(air) {
+				moveSpeed -= 5;
+			}
+			if (GetComponent<Player> ().isLocalPlayer) {
+				camWaterUI.enabled = true;
+				camWaveField.SetActive (true);
+			}
+			motor.SetWaterState (true);
+			inWater = true;
+		}
+		if(!_wasterSet) {
+			moveSpeed = defaultSpeed;
+			if (GetComponent<Player> ().isLocalPlayer) {
+				camWaveField.SetActive (false);
+				camWaterUI.enabled = false;
+			}
+			motor.SetWaterState (false);
+			inWater = false;
+		}
+	}
+
+	public IEnumerator BoostSpeed(float _speedBoost) {
+		float _baseSpeed = moveSpeed;
+
+		moveSpeed += _speedBoost;
+
+		yield return new WaitForSeconds(3.5f);
+		moveSpeed = _baseSpeed;
+	}
+}
